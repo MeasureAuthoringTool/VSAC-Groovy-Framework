@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+ <project name="vsacGroovy" default="compile">
+   <property name="groovy.home" value="C:\Program Files (x86)\Groovy\Groovy-2.3.4"/>
+   <property name="groovy.version" value="2.3.4"/>
+   <path id="groovy.classpath">
+		<fileset dir="${groovy.home}/embeddable">
+       		<include name="groovy-all-${groovy.version}.jar" />
+     	</fileset>
+     	<fileset dir="lib">
+       		<include name="*.jar" />
+     	</fileset>
+	</path>
+   <taskdef name="groovyc" classname="org.codehaus.groovy.ant.Groovyc" classpathref="groovy.classpath"/>
+
+   <target name="compile" description="compile groovy sources" >
+   	<delete dir="dist"/>
+   	<mkdir dir="dist/WEB-INF/classes"/>
+   	<mkdir dir="dist/WEB-INF/lib"/>
+   	<mkdir dir="dist/META-INF"/>
+   	<delete file="dist/vsac_framework.jar"/>
+	<groovyc srcdir="src" destdir="dist/WEB-INF/classes" listfiles="true" classpathref="groovy.classpath"/>
+     <jar destfile="dist/vsac_framework.jar">
+   	            <manifest>
+   	                <attribute name="Main-Class" value="org.eclipse.jdt.internal.jarinjarloader.JarRsrcLoader"/>
+   	            	<attribute name="Rsrc-Main-Class" value="org.vsac.DummyMainClass"/>
+   	                <attribute name="Class-Path" value="."/>
+   	                <attribute name="Rsrc-Class-Path" value="./ ant-1.8.1.jar ant-launcher-1.8.1.jar ant-testutil-1.7.1.jar commons-cli-2.jar commons-codec-1.9.jar commons-httpclient-3.1.jar commons-logging-1.2.jar"/>
+   	            </manifest>
+   	            <zipfileset src="jar-in-jar-loader.zip"/>
+   	            <fileset dir="dist/WEB-INF/classes"/>
+   	            <zipfileset dir="lib" includes="ant-1.8.1.jar.jar"/>
+     			<zipfileset dir="lib" includes="ant-launcher-1.8.1.jar"/>
+   	            <zipfileset dir="lib" includes="ant-testutil-1.7.1.jar"/>
+   	            <zipfileset dir="lib" includes="commons-cli-2.jar"/>
+   	            <zipfileset dir="lib" includes="commons-codec-1.9.jar"/>
+     			<zipfileset dir="lib" includes="commons-httpclient-3.1.jar"/>
+     	<zipfileset dir="lib" includes="commons-logging-1.2.jar"/>
+   	 </jar>
+   </target>
+ </project>
