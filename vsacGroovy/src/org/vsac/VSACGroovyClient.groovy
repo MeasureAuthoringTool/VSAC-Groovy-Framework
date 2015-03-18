@@ -17,11 +17,18 @@ import org.apache.commons.httpclient.params.HttpClientParams
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams
 import org.apache.commons.httpclient.params.HttpParams
 import org.apache.commons.httpclient.params.HttpConnectionParams
+import org.apache.commons.httpclient.util.EncodingUtil;
+/**
+ * @author MAT Team
+ *
+ */
 class VSACGroovyClient {
 	static final Logger LOG = Logger.getLogger(VSACGroovyClient.class.getName())
 	String server
 	String service
 	String retieriveMultiOIDSService
+	String profileService
+	String retieriveVersionListForOidService
 	HttpClient client
 	static final String UTF8_BOM = "\uFEFF";
 	static final int TIMEOUT_PERIOD = 5 * 60 * 1000
@@ -31,22 +38,27 @@ class VSACGroovyClient {
 	/**
 	 * Constructor
 	 * */
-	VSACGroovyClient(String proxyServer, int proxyPort,String vsacServerURL , String vsacServiceURL , String vsacReteriveServiceURL){
+	VSACGroovyClient(String proxyServer, int proxyPort,String vsacServerURL , String vsacServiceURL , String vsacReteriveServiceURL, String profileServiceURL, String versionServiceURL){
 		HttpConnectionManager manager = new SimpleHttpConnectionManager()
 		manager.setParams(new HttpConnectionManagerParams())
 		HttpClientParams params = new HttpClientParams()
 		params.setSoTimeout(TIMEOUT_PERIOD)
 		HttpClient httpClient = new HttpClient(params, manager)
-		httpClient.getHostConfiguration().setProxy(proxyServer, proxyPort)
+		if(proxyServer)
+			httpClient.getHostConfiguration().setProxy(proxyServer, proxyPort)
 		client = httpClient
 		server = vsacServerURL
 		service = vsacServiceURL
 		retieriveMultiOIDSService = vsacReteriveServiceURL
+		profileService = profileServiceURL
+		retieriveVersionListForOidService = versionServiceURL
 	}
 	/**
 	 *Eight hour Ticket granting service call.
-	 *
-	 * **/
+	 * @param username
+	 * @param password
+	 * @return 8 Hours Ticket Granting Ticket in String.
+	 */
 	String getTicketGrantingTicket(String username, String password)  {
 		def eightHourTicket = null
 		PostMethod post = new PostMethod(server)
@@ -71,7 +83,9 @@ class VSACGroovyClient {
 	}
 	/**
 	 *Five min Ticket granting service call.
-	 * **/
+	 * @param ticketGrantingTicket
+	 * @return Five Min Service Ticket in String.
+	 */
 	String getServiceTicket(String ticketGrantingTicket)
 	{
 		if (!ticketGrantingTicket)
@@ -101,19 +115,123 @@ class VSACGroovyClient {
 		if (object == null)
 			throw new IllegalArgumentException(message)
 	}
+	
+	/**
+	 * Retrieve All profile List.
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
+	VSACResponseResult getProfileList(String serviceTicket){
+		VSACResponseResult vsacResponseResult = new VSACResponseResult()
+		if(serviceTicket == null) {
+			return null
+		}
+		GetMethod method = new GetMethod(profileService);
+		method.setQueryString([new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[1]))
+		def responseString = null
+		try      {
+			client.executeMethod(method)
+			switch (method.getStatusCode())        {
+				case 200:
+					InputStreamReader inputStreamReader = new InputStreamReader(method.getResponseBodyAsStream(),
+						"UTF-8");
+					BufferedReader r = new BufferedReader(inputStreamReader);
+					StringBuilder stringBuilder = new StringBuilder();
+					boolean firstLine = true;
+					for (String s = ""; (s = r.readLine()) != null;) {
+						if (firstLine) {
+								s = removeUTF8BOM(s);
+								firstLine = false;
+						}
+						stringBuilder.append(s);
+					}
+					responseString = stringBuilder.toString()
+					LOG.info(responseString)
+					vsacResponseResult.setXmlPayLoad(responseString)
+					break
+				default:
+					LOG.warning("Invalid response code (" + method.getStatusCode() + ") from VSAC server!")
+					break        }
+		}catch (Exception e) {
+			LOG.warning("EXCEPTION IN VSAC JAR: getProfileList..")
+			if (e instanceof java.net.SocketTimeoutException) {
+				vsacResponseResult.setFailReason(REQUEST_TIMEDOUT);
+			} else {
+				vsacResponseResult.setFailReason(REQUEST_FAILED);
+			}
+		} finally {
+			method.releaseConnection()
+		}
+		return vsacResponseResult
+	}
+	
+	/**
+	 * Reterival of Versions for given OID.
+	 * @param oid
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
+	VSACResponseResult reteriveVersionListForOid(String oid,String serviceTicket){
+		VSACResponseResult vsacResponseResult = new VSACResponseResult()
+		if(serviceTicket == null) {
+			return null
+		}
+		String versionServiceURL = retieriveVersionListForOidService +  oid+"/versions"
+		GetMethod method = new GetMethod(versionServiceURL);
+		method.setQueryString([new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[1]))
+		def responseString = null
+		try      {
+			client.executeMethod(method)
+			switch (method.getStatusCode())        {
+				case 200:
+					InputStreamReader inputStreamReader = new InputStreamReader(method.getResponseBodyAsStream(),
+						"UTF-8");
+					BufferedReader r = new BufferedReader(inputStreamReader);
+					StringBuilder stringBuilder = new StringBuilder();
+					boolean firstLine = true;
+					for (String s = ""; (s = r.readLine()) != null;) {
+						if (firstLine) {
+								s = removeUTF8BOM(s);
+								firstLine = false;
+						}
+						stringBuilder.append(s);
+					}
+					responseString = stringBuilder.toString()
+					LOG.info(responseString)
+					vsacResponseResult.setXmlPayLoad(responseString)
+					break
+				default:
+					LOG.warning("Invalid response code (" + method.getStatusCode() + ") from VSAC server!")
+					break        }
+		}catch (Exception e) {
+			LOG.warning("EXCEPTION IN VSAC JAR: reteriveVersionListForOid..")
+			if (e instanceof java.net.SocketTimeoutException) {
+				vsacResponseResult.setFailReason(REQUEST_TIMEDOUT);
+			} else {
+				vsacResponseResult.setFailReason(REQUEST_FAILED);
+			}
+		} finally {
+			method.releaseConnection()
+		}
+		return vsacResponseResult
+	}
 	/**
 	 * Multiple Value Set Retrieval based on oid.
-	 * 
-	 * **/
+	 * @param oid
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
 	VSACResponseResult getMultipleValueSetsResponseByOID(String oid, String serviceTicket) {
 		VSACResponseResult vsacResponseResult = new VSACResponseResult()
 		if(serviceTicket == null) {
 			return null
 		}
 		GetMethod method = new GetMethod(retieriveMultiOIDSService)
-		method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("ticket", serviceTicket),
+		/*method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("ticket", serviceTicket),
 			new NameValuePair("ReleaseType", "VSAC"),new NameValuePair("IncludeDraft", "yes")
-				].toArray(new NameValuePair[4])))
+				].toArray(new NameValuePair[4])))*/
+		
+		method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[2])))
 		LOG.info "VSAC URL inside getMultipleValueSetsResponseByOID method : " + method.getURI()
 		def responseString = null
 		try {
@@ -153,18 +271,24 @@ class VSACGroovyClient {
 	}
 	/**
 	 * Multiple Value Set Retrieval based on oid and version.
-	 *
-	 * **/
+	 * @param oid
+	 * @param version
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
 	VSACResponseResult getMultipleValueSetsResponseByOIDAndVersion( String oid, String version ,String serviceTicket) {
 		VSACResponseResult vsacResponseResult = new VSACResponseResult()
 		if(serviceTicket == null) {
 			return null
 		}
 		 GetMethod method = new GetMethod(retieriveMultiOIDSService)
-		 method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("version", version),
+		 /*method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("version", version),
 			new NameValuePair("ticket", serviceTicket),
 			new NameValuePair("ReleaseType", "VSAC"),new NameValuePair("IncludeDraft", "yes")
-				].toArray(new NameValuePair[5])))
+				].toArray(new NameValuePair[5])))*/
+		 method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("version", version),
+			 new NameValuePair("ticket", serviceTicket)
+				 ].toArray(new NameValuePair[3])))
 		 LOG.info "VSAC URL inside getMultipleValueSetsResponseByOIDAndVersion method : " + method.getURI()
 		def responseString = null
 		try      {
@@ -204,8 +328,11 @@ class VSACGroovyClient {
 	}
 	/**
 	 * Multiple Value Set Retrieval based on oid and effective date.
-	 *
-	 * **/
+	 * @param oid
+	 * @param effectiveDate
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
 	VSACResponseResult getMultipleValueSetsResponseByOIDAndEffectiveDate(String oid, String effectiveDate ,String serviceTicket) {
 		VSACResponseResult vsacResponseResult = new VSACResponseResult()
 		if(serviceTicket == null) {
@@ -219,6 +346,62 @@ class VSACGroovyClient {
 		 LOG.info "VSAC URL inside getMultipleValueSetsResponseByOIDAndEffectiveDate method : " + method.getURI()
 		def responseString = null
 		try      {
+			client.executeMethod(method)
+			switch (method.getStatusCode())        {
+				case 200:
+					InputStreamReader inputStreamReader = new InputStreamReader(method.getResponseBodyAsStream(),
+						"UTF-8");
+					BufferedReader r = new BufferedReader(inputStreamReader);
+					StringBuilder stringBuilder = new StringBuilder();
+					boolean firstLine = true;
+					for (String s = ""; (s = r.readLine()) != null;) {
+						if (firstLine) {
+								s = removeUTF8BOM(s);
+								firstLine = false;
+						}
+						stringBuilder.append(s);
+					}
+					responseString = stringBuilder.toString()
+					LOG.info(responseString)
+					vsacResponseResult.setXmlPayLoad(responseString)
+					break
+				default:
+					LOG.warning("Invalid response code (" + method.getStatusCode() + ") from VSAC server!")
+					break        }
+		}catch (Exception e) {
+			LOG.warning("EXCEPTION IN VSAC JAR: getTicketGrantingTicket..")
+			if (e instanceof java.net.SocketTimeoutException) {
+				vsacResponseResult.setFailReason(REQUEST_TIMEDOUT);
+			} else {
+				vsacResponseResult.setFailReason(REQUEST_FAILED);
+			}
+		} finally {
+			method.releaseConnection()
+		}
+		return vsacResponseResult
+	}
+	
+	/**
+	 * Multiple Value Set Retrieval based on oid and Profile Name.
+	 * @param oid
+	 * @param effectiveDate
+	 * @param serviceTicket
+	 * @return VSACResponseResult
+	 */
+	VSACResponseResult getMultipleValueSetsResponseByOIDAndProfile(String oid, String profile ,String serviceTicket) {
+		VSACResponseResult vsacResponseResult = new VSACResponseResult()
+		if(serviceTicket == null) {
+			return null
+		}
+		GetMethod method = new GetMethod(retieriveMultiOIDSService)
+		def queryString = EncodingUtil.formUrlEncode(([new NameValuePair("id", oid),new NameValuePair("profile", profile),
+			new NameValuePair("ticket", serviceTicket),new NameValuePair("includeDraft", "yes")].toArray(new NameValuePair[4])), "UTF-8");
+		method.setQueryString(queryString)
+		LOG.info "VSAC URL inside getMultipleValueSetsResponseByOIDAndEffectiveDate method : " + queryString
+		def responseString = null
+		try      {
+			URLEncoder.encode(method.getQueryString(), "UTF-8")
+			LOG.info "VSAC URL inside getMultipleValueSetsResponseByOIDAndEffectiveDate method Encoding done : " + method.getURI()
 			client.executeMethod(method)
 			switch (method.getStatusCode())        {
 				case 200:
