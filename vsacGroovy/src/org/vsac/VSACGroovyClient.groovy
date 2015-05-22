@@ -63,6 +63,7 @@ class VSACGroovyClient {
 		def eightHourTicket = null
 		PostMethod post = new PostMethod(server)
 		post.setRequestBody([new NameValuePair("username", username),new NameValuePair("password", password)].toArray(new NameValuePair[2]))
+		LOG.info "VSAC URL inside getTicketGrantingTicket method : " + post.getURI()
 		try    {
 			client.executeMethod(post)
 			switch (post.getStatusCode())      {
@@ -90,15 +91,16 @@ class VSACGroovyClient {
 	{
 		if (!ticketGrantingTicket)
 			return null
-		PostMethod post = new PostMethod("$server/$ticketGrantingTicket")
+	    def eightMinTicketURL = server +"/"+ticketGrantingTicket
+		PostMethod post = new PostMethod(eightMinTicketURL)
 		post.setRequestBody([new NameValuePair("service", service)].toArray(new NameValuePair[1]))
+		LOG.info "VSAC URL inside getServiceTicket method : " + post.getURI()
 		def srviceTicketFiveMin = null
 		try    {
 			client.executeMethod(post)
 			switch (post.getStatusCode())      {
 				case 200:
-				String response = post.getResponseBodyAsString()
-				srviceTicketFiveMin = response
+				srviceTicketFiveMin = post.getResponseBodyAsString()
 				break
 				default:
 					LOG.warning("Invalid response code ( $post.getStatusCode() ) from VSAC server!")
@@ -128,6 +130,7 @@ class VSACGroovyClient {
 		}
 		GetMethod method = new GetMethod(profileService);
 		method.setQueryString([new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[1]))
+		LOG.info "VSAC URL inside getProfileList method : " + method.getURI()
 		def responseString = null
 		try      {
 			client.executeMethod(method)
@@ -179,6 +182,7 @@ class VSACGroovyClient {
 		String versionServiceURL = retieriveVersionListForOidService +  oid+"/versions"
 		GetMethod method = new GetMethod(versionServiceURL);
 		method.setQueryString([new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[1]))
+		LOG.info "VSAC URL inside reteriveVersionListForOid method : " + method.getURI()
 		def responseString = null
 		try      {
 			client.executeMethod(method)
@@ -221,7 +225,7 @@ class VSACGroovyClient {
 	 * @param serviceTicket
 	 * @return VSACResponseResult
 	 */
-	VSACResponseResult getMultipleValueSetsResponseByOID(String oid, String serviceTicket) {
+	VSACResponseResult getMultipleValueSetsResponseByOID(String oid, String serviceTicket, String profile) {
 		VSACResponseResult vsacResponseResult = new VSACResponseResult()
 		if(serviceTicket == null) {
 			return null
@@ -231,7 +235,9 @@ class VSACGroovyClient {
 			new NameValuePair("ReleaseType", "VSAC"),new NameValuePair("IncludeDraft", "yes")
 				].toArray(new NameValuePair[4])))*/
 		
-		method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[2])))
+		//method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("ticket", serviceTicket)].toArray(new NameValuePair[2])))
+		method.setQueryString(([new NameValuePair("id", oid),new NameValuePair("profile",profile)
+			,new NameValuePair("ticket", serviceTicket),new NameValuePair("includeDraft", "yes")].toArray(new NameValuePair[4])))
 		LOG.info "VSAC URL inside getMultipleValueSetsResponseByOID method : " + method.getURI()
 		def responseString = null
 		try {
